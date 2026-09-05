@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import type ClippingsPlugin from './main';
+import { DEFAULT_FILENAME_TEMPLATE, DEFAULT_FOLDER_TEMPLATE } from './render';
 
 export const DEFAULT_SERVER = 'https://clippingsapp.xyz';
 
@@ -10,6 +11,8 @@ export interface ClippingsSettings {
 	server: string;
 	/** Minted once per vault and never changed: the server keys its per-vault ledger on it. */
 	vaultKey: string;
+	/** Unix seconds of the first successful connect on this vault — the `since` for "no history". */
+	connectedAt: number;
 	baseFolder: string;
 	folderTemplate: string;
 	folderOverrides: Record<number, string>; // notebook_id → folder
@@ -27,10 +30,11 @@ export interface ClippingsSettings {
 export const DEFAULT_SETTINGS: ClippingsSettings = {
 	server: DEFAULT_SERVER,
 	vaultKey: '',
+	connectedAt: 0,
 	baseFolder: 'Clippings',
-	folderTemplate: '{{notebook}}',
+	folderTemplate: DEFAULT_FOLDER_TEMPLATE,
 	folderOverrides: {},
-	filenameTemplate: '{{saved|date:YYYY-MM-DD}} {{title|truncate:60}}',
+	filenameTemplate: DEFAULT_FILENAME_TEMPLATE,
 	noteTemplate: '',
 	existingNote: 'skip',
 	syncHistory: true,

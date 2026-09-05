@@ -2,17 +2,23 @@ import { Notice, Plugin } from 'obsidian';
 import { ApiClient, SignedOut } from './api';
 import { AuthError, AuthStore, PROTOCOL_ACTION } from './auth';
 import { ClippingsSettingTab, ClippingsSettings, DEFAULT_SETTINGS } from './settings';
+import { Syncer } from './sync';
 
 export default class ClippingsPlugin extends Plugin {
 	settings!: ClippingsSettings;
 	auth!: AuthStore;
 	api!: ApiClient;
 	settingTab!: ClippingsSettingTab;
+	syncer!: Syncer;
+	private statusEl: HTMLElement | null = null;
+	private timer: number | null = null;
 
 	async onload() {
 		await this.loadSettings();
 		this.auth = new AuthStore(this.app);
 		this.api = new ApiClient(this.auth);
+		this.syncer = new Syncer(this);
+		this.statusEl = this.addStatusBarItem();
 
 		// The browser comes back here after sign-in: obsidian://clippings-auth?code=…&state=…
 		this.registerObsidianProtocolHandler(PROTOCOL_ACTION, (params) => {
@@ -29,9 +35,34 @@ export default class ClippingsPlugin extends Plugin {
 
 		this.settingTab = new ClippingsSettingTab(this.app, this);
 		this.addSettingTab(this.settingTab);
+
+		// Sync once the vault is indexed (the ledger reads the metadata cache),
+		// then on the timer. Both are quiet unless something lands.
+		this.app.workspace.onLayoutReady(() => {
+			if (this.settings.syncOnLaunch) void this.syncer.run({ manual: false });
+		});
+		this.schedule();
 	}
 
 	onunload() {}
+
+	/** (Re)arm the periodic sync from settings.syncEveryMinutes; 0 turns it off. */
+	schedule(): void {
+		if (this.timer !== null) {
+			window.clearInterval(this.timer);
+			this.timer = null;
+		}
+		const minutes = this.settings.syncEveryMinutes;
+		if (minutes > 0) {
+			this.timer = this.registerInterval(
+				window.setInterval(() => void this.syncer.run({ manual: false }), minutes * 60_000),
+			);
+		}
+	}
+
+	setStatus(text: string): void {
+		this.statusEl?.setText(text);
+	}
 
 	isConnected(): boolean {
 		return this.auth.load() !== null;
@@ -56,6 +87,10 @@ export default class ClippingsPlugin extends Plugin {
 			tokens.email = me.email;
 			tokens.planLabel = me.plan_label;
 			this.auth.save(tokens);
+			if (!this.settings.connectedAt) {
+				this.settings.connectedAt = Math.floor(Date.now() / 1000);
+				await this.saveSettings();
+			}
 			new Notice(
 				`Connected ${this.app.vault.getName()} to Clippings as ${me.email}. ` +
 					'Turn on Obsidian in your Clippings settings to start publishing here.',
@@ -82,12 +117,7 @@ export default class ClippingsPlugin extends Plugin {
 	}
 
 	async syncNow(): Promise<void> {
-		if (!this.isConnected()) {
-			new Notice('Connect Clippings in the plugin settings first.');
-			return;
-		}
-		// The sync engine arrives with Day 4 (docs/OBSIDIAN.md §7–8 in the backend repo).
-		new Notice('Clippings: sync is not built yet — the connection works, the notes come next.');
+		await this.syncer.run({ manual: true });
 	}
 
 	async loadSettings() {
