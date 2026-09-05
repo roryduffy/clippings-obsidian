@@ -7,7 +7,8 @@ export interface Clip {
 	title: string;
 	creator: string;
 	platform: string; // tiktok | instagram | youtube | x | facebook | other
-	url: string;
+	url: string; // the post on its platform
+	clippings_url: string; // the clip's page on clippingsapp.xyz
 	notebook: string;
 	notebook_id: number;
 	note: string; // what the user typed when saving ("why I saved this")
