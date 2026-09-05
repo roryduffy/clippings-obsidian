@@ -77,6 +77,15 @@ export class ApiClient {
 		return this.call<Me>('GET', '/api/me');
 	}
 
+	notebooks(): Promise<{ id: number; name: string; destinations: string[] }[]> {
+		return this.call('GET', '/api/notebooks');
+	}
+
+	clip(vaultKey: string, id: number): Promise<Clip> {
+		const q = new URLSearchParams({ vault: vaultKey });
+		return this.call<Clip>('GET', `/api/obsidian/clips/${id}?${q.toString()}`);
+	}
+
 	registerVault(vaultKey: string, name: string): Promise<{ vault_id: number }> {
 		return this.call('POST', '/api/obsidian/vaults', { vault_key: vaultKey, name });
 	}

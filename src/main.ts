@@ -32,6 +32,13 @@ export default class ClippingsPlugin extends Plugin {
 				void this.syncNow();
 			},
 		});
+		this.addCommand({
+			id: 'rerender-notes',
+			name: 'Re-render notes from the template',
+			callback: () => {
+				void this.rerender();
+			},
+		});
 
 		this.settingTab = new ClippingsSettingTab(this.app, this);
 		this.addSettingTab(this.settingTab);
@@ -120,9 +127,20 @@ export default class ClippingsPlugin extends Plugin {
 		await this.syncer.run({ manual: true });
 	}
 
+	async rerender(): Promise<void> {
+		await this.syncer.rerender();
+	}
+
 	async loadSettings() {
 		const stored = ((await this.loadData()) ?? {}) as Partial<ClippingsSettings>;
 		this.settings = { ...DEFAULT_SETTINGS, ...stored };
+		// Older data.json shapes: a policy that no longer exists, missing maps.
+		if (!['skip', 'overwrite-if-unedited', 'overwrite'].includes(this.settings.existingNote)) {
+			this.settings.existingNote = 'skip';
+		}
+		this.settings.written ??= {};
+		this.settings.hashes ??= {};
+		this.settings.folderOverrides ??= {};
 		if (!this.settings.vaultKey) {
 			// Minted once and kept in data.json so it follows the vault across
 			// devices and survives re-auth; the server ledgers per vault key.

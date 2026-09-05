@@ -1,1 +1,31 @@
 /* Clippings — settings-tab tweaks only. Everything else is Obsidian's own UI. */
+.clippings-template {
+	flex-direction: column;
+	align-items: stretch;
+}
+.clippings-template .setting-item-control {
+	width: 100%;
+	margin-top: 8px;
+}
+.clippings-template textarea {
+	width: 100%;
+	min-height: 320px;
+	font-family: var(--font-monospace);
+	font-size: var(--font-smaller);
+	line-height: 1.4;
+	resize: vertical;
+}
+.clippings-template-error {
+	color: var(--text-error);
+	font-size: var(--font-smaller);
+	margin-top: 6px;
+	min-height: 1.2em;
+}
+.clippings-help {
+	color: var(--text-muted);
+	font-size: var(--font-smaller);
+	margin: -4px 0 12px;
+}
+.clippings-help code {
+	font-size: var(--font-smaller);
+}
