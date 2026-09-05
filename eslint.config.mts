@@ -29,4 +29,9 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		rules: {
+			'obsidianmd/ui/sentence-case': ['warn', { brands: ['Clippings', 'Obsidian', 'NotebookLM', 'Notion'] }],
+		},
+	},
 );

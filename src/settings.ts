@@ -48,14 +48,43 @@ export class ClippingsSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/** Re-render if the tab is open — the sign-in callback lands while it is. */
+	refresh(): void {
+		if (this.containerEl.isShown()) this.display();
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		new Setting(containerEl)
-			.setName('Account')
-			.setDesc('Not connected. Connecting arrives with the next milestone.')
-			.addButton((b) => b.setButtonText('Connect').setDisabled(true));
+		const tokens = this.plugin.auth.load();
+		if (tokens) {
+			new Setting(containerEl)
+				.setName('Account')
+				.setDesc(
+					`Connected as ${tokens.email ?? 'your account'}` +
+						(tokens.planLabel ? ` (${tokens.planLabel})` : '') +
+						'. Turn Obsidian on in your Clippings settings to publish here.',
+				)
+				.addButton((b) =>
+					b.setButtonText('Disconnect').onClick(async () => {
+						b.setDisabled(true);
+						await this.plugin.disconnect();
+					}),
+				);
+		} else {
+			new Setting(containerEl)
+				.setName('Account')
+				.setDesc('Not connected. Connect opens your browser to sign in to Clippings and sends you back here.')
+				.addButton((b) =>
+					b
+						.setButtonText('Connect')
+						.setCta()
+						.onClick(async () => {
+							await this.plugin.connect();
+						}),
+				);
+		}
 
 		new Setting(containerEl).setName('Where clips land').setHeading();
 
