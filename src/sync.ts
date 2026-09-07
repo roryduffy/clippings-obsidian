@@ -107,7 +107,7 @@ export class Syncer {
 			if (current === body) return 'skipped'; // nothing would change
 			const unedited = s.hashes[clip.id] !== undefined && s.hashes[clip.id] === (await sha256(current));
 			if (s.existingNote === 'overwrite' || (s.existingNote === 'overwrite-if-unedited' && unedited)) {
-				await app.vault.modify(existing, body);
+				await app.vault.process(existing, () => body);
 				s.hashes[clip.id] = await sha256(body);
 				return 'updated';
 			}

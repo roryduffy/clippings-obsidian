@@ -50,10 +50,19 @@ notes, with control over where they land and what they look like.
   you in, to fetch clips your vault has not received, to fetch a clip again
   when you re-render, and to report which notes it wrote. Nothing else is
   contacted.
-- **Account required.** You need a Clippings account. Obsidian is a
-  connection like NotebookLM and Notion: one connection at a time on
-  Starter, every connection on Pro. Saving clips is Clippings' paid service.
-- **No telemetry.** The plugin collects no usage data.
+- **Account required.** You need a Clippings account
+  ([clippingsapp.xyz](https://clippingsapp.xyz)). The plugin signs you in
+  with that account; it cannot be used without one.
+- **Payment required for full access.** Syncing to Obsidian is part of
+  Clippings' paid plans, Starter and Pro, because Obsidian is one of the
+  "connections" those plans include. A free account can install the plugin
+  and sign in, but cannot turn the Obsidian connection on, so nothing will
+  sync. Saving clips in the first place is also part of the paid service.
+  Plans and prices: [clippingsapp.xyz/pricing](https://clippingsapp.xyz/pricing).
+- **No telemetry.** The plugin collects no usage data and sends nothing
+  to anyone but the Clippings server described above. Clippings' own
+  handling of your account and clips is covered by its
+  [privacy policy](https://clippingsapp.xyz/privacy).
 - **What is stored where.** Settings, the map of which clip became which
   note, and the hashes that tell an edited note from an untouched one are in
   this plugin's `data.json`. Your sign-in is kept in Obsidian's per-device
@@ -86,4 +95,5 @@ use the Hot Reload plugin. Under **Advanced** in the settings, point
 
 ## Licence
 
-MIT.
+[MIT](LICENSE). Obsidian is a trademark of Dynalist Inc.; this plugin is an
+independent project that works with Obsidian and is not affiliated with it.

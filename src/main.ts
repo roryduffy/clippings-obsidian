@@ -60,7 +60,8 @@ export default class ClippingsPlugin extends Plugin {
 			};
 			const ref = this.app.metadataCache.on('resolved', go);
 			this.registerEvent(ref);
-			window.setTimeout(go, 10_000);
+			const timer = window.setTimeout(go, 10_000);
+			this.register(() => window.clearTimeout(timer));
 		});
 		this.schedule();
 	}
