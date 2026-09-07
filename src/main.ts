@@ -2,6 +2,7 @@ import { Notice, Plugin } from 'obsidian';
 import { ApiClient, SignedOut } from './api';
 import { AuthError, AuthStore, PROTOCOL_ACTION } from './auth';
 import { ClippingsSettingTab, ClippingsSettings, DEFAULT_SETTINGS } from './settings';
+import { Ledger } from './ledger';
 import { Syncer } from './sync';
 
 export default class ClippingsPlugin extends Plugin {
@@ -64,6 +65,20 @@ export default class ClippingsPlugin extends Plugin {
 			this.register(() => window.clearTimeout(timer));
 		});
 		this.schedule();
+
+		// Follow our notes when the user moves, renames or deletes them, so the
+		// ledger never needs to look further than its own folder.
+		const ledger = new Ledger(this.app, this.settings);
+		this.registerEvent(
+			this.app.vault.on('rename', (file, oldPath) => {
+				if (ledger.follow(oldPath, file.path)) void this.saveSettings();
+			}),
+		);
+		this.registerEvent(
+			this.app.vault.on('delete', (file) => {
+				if (ledger.forget(file.path)) void this.saveSettings();
+			}),
+		);
 	}
 
 	onunload() {}

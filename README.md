@@ -72,8 +72,10 @@ notes, with control over where they land and what they look like.
   Disconnect button.
 - **Never deletes.** Deleting a clip in Clippings never touches a note. A
   note you delete in the vault is not written again.
-- **Moved notes are fine.** The plugin finds its notes by `clippings_id`, so
-  rename them or move them anywhere in the vault.
+- **Moved notes are fine.** The plugin follows its notes when you rename or
+  move them, and it only ever reads inside its own base folder: on a fresh
+  install it recognises existing Clippings notes there by their
+  `clippings_id`, and it never lists the rest of your vault.
 - **Several vaults.** Each connected vault gets every clip. A vault that
   reconnects picks up where it left off.
 - **Offline.** A sync that cannot reach the server says so in the status bar
