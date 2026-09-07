@@ -5,7 +5,9 @@ videos and photo carousels from TikTok, Instagram, YouTube Shorts, X and
 Facebook, transcribed with key takeaways — into your vault as Markdown
 notes, with control over where they land and what they look like.
 
-> **Status: pre-release.** Not yet in the community plugin directory.
+> **Status: 0.1.0.** Submitted to the community plugin directory. Until it is
+> listed, install it with [BRAT](https://github.com/TfTHacker/obsidian42-brat)
+> using the repository `roryduffy/clippings-obsidian`.
 
 ## How it works
 
