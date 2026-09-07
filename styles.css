@@ -1,13 +1,13 @@
 /* Clippings — settings-tab tweaks only. Everything else is Obsidian's own UI. */
-.clippings-template {
+.clippings-template-group .setting-item:has(textarea) {
 	flex-direction: column;
 	align-items: stretch;
 }
-.clippings-template .setting-item-control {
+.clippings-template-group .setting-item-control {
 	width: 100%;
 	margin-top: 8px;
 }
-.clippings-template textarea {
+.clippings-template-group textarea {
 	width: 100%;
 	min-height: 320px;
 	font-family: var(--font-monospace);

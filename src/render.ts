@@ -8,8 +8,46 @@
  * Every variable is always defined (see `variables`), so a template never
  * has to guard against a missing field — only against an empty one.
  */
-import { moment } from 'obsidian';
 import type { Clip } from './types';
+
+/**
+ * Date formatting without moment. Obsidian exports moment, but the type of
+ * that export resolves to `any` wherever the moment typings are not
+ * installed — which includes the directory's automated review — and the
+ * handful of tokens a note template needs are easy to cover by hand.
+ * Tokens: YYYY YY MMMM MMM MM M DD D dddd ddd HH H hh h mm ss A a. Anything
+ * in [square brackets] is literal.
+ */
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+export function formatDate(d: Date, fmt: string): string {
+	const pad = (n: number) => String(n).padStart(2, '0');
+	const h12 = d.getHours() % 12 || 12;
+	const tokens: Record<string, () => string> = {
+		YYYY: () => String(d.getFullYear()),
+		YY: () => String(d.getFullYear()).slice(-2),
+		MMMM: () => MONTHS[d.getMonth()] ?? '',
+		MMM: () => (MONTHS[d.getMonth()] ?? '').slice(0, 3),
+		MM: () => pad(d.getMonth() + 1),
+		M: () => String(d.getMonth() + 1),
+		DD: () => pad(d.getDate()),
+		D: () => String(d.getDate()),
+		dddd: () => DAYS[d.getDay()] ?? '',
+		ddd: () => (DAYS[d.getDay()] ?? '').slice(0, 3),
+		HH: () => pad(d.getHours()),
+		H: () => String(d.getHours()),
+		hh: () => pad(h12),
+		h: () => String(h12),
+		mm: () => pad(d.getMinutes()),
+		ss: () => pad(d.getSeconds()),
+		A: () => (d.getHours() < 12 ? 'AM' : 'PM'),
+		a: () => (d.getHours() < 12 ? 'am' : 'pm'),
+	};
+	return fmt.replace(/\[([^\]]*)\]|YYYY|YY|MMMM|MMM|MM|M|DD|D|dddd|ddd|HH|H|hh|h|mm|ss|A|a/g, (m, literal: string | undefined) =>
+		literal !== undefined ? literal : (tokens[m]?.() ?? m),
+	);
+}
 
 export const PLATFORM_LABELS: Record<string, string> = {
 	tiktok: 'TikTok',
@@ -48,8 +86,8 @@ export function variables(clip: Clip): Vars {
 		thumbnail_url: clip.thumbnail_url,
 		saved,
 		completed: clip.completed_at ? new Date(clip.completed_at) : null,
-		year: moment(saved).format('YYYY'),
-		month: moment(saved).format('MM'),
+		year: formatDate(saved, 'YYYY'),
+		month: formatDate(saved, 'MM'),
 	};
 }
 
@@ -81,13 +119,13 @@ function truthy(v: Vars[string]): boolean {
 function text(v: Vars[string]): string {
 	if (v === null || v === undefined) return '';
 	if (Array.isArray(v)) return v.join(', ');
-	if (v instanceof Date) return moment(v).format('YYYY-MM-DD');
+	if (v instanceof Date) return formatDate(v, 'YYYY-MM-DD');
 	return String(v);
 }
 
 const FILTERS: Record<string, (v: Vars[string], arg: string) => string> = {
-	// Dates: any moment format, default ISO-ish local time that Obsidian reads as a datetime property.
-	date: (v, arg) => (v instanceof Date ? moment(v).format(arg || 'YYYY-MM-DDTHH:mm:ss') : text(v)),
+	// Dates: moment-style tokens (see formatDate), default a local datetime Obsidian reads as a date property.
+	date: (v, arg) => (v instanceof Date ? formatDate(v, arg || 'YYYY-MM-DDTHH:mm:ss') : text(v)),
 	slug: (v) => slugify(text(v)),
 	upper: (v) => text(v).toUpperCase(),
 	lower: (v) => text(v).toLowerCase(),

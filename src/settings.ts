@@ -1,12 +1,6 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, SettingDefinitionItem, SettingGroupItem } from 'obsidian';
 import type ClippingsPlugin from './main';
-import {
-	DEFAULT_FILENAME_TEMPLATE,
-	DEFAULT_FOLDER_TEMPLATE,
-	DEFAULT_NOTE_TEMPLATE,
-	render,
-	variables,
-} from './render';
+import { DEFAULT_FILENAME_TEMPLATE, DEFAULT_FOLDER_TEMPLATE, DEFAULT_NOTE_TEMPLATE, render, variables } from './render';
 import type { Clip } from './types';
 
 export const DEFAULT_SERVER = 'https://clippingsapp.xyz';
@@ -80,6 +74,7 @@ export const SAMPLE_CLIP: Clip = {
 	completed_at: new Date().toISOString(),
 };
 
+/** '' when the template renders; otherwise the engine's complaint. */
 export function templateError(template: string): string {
 	try {
 		render(template, variables(SAMPLE_CLIP));
@@ -95,30 +90,282 @@ const VARIABLES =
 	'saved, completed, year, month, clip_id';
 const FILTERS = 'date:FORMAT, slug, upper, lower, truncate:N, yaml, wikilink, list, quote, tag';
 
+const OVERRIDE = 'override:'; // control keys for per-notebook folders route into folderOverrides
+
+interface Notebook {
+	id: number;
+	name: string;
+	destinations: string[];
+}
+
+function str(value: unknown): string {
+	if (typeof value === 'string') return value;
+	if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+	return '';
+}
+
+/**
+ * Declarative (Obsidian 1.13+): the framework renders `getSettingDefinitions()`
+ * and indexes it for settings search, so there is no display() here. Rows
+ * that need more than a bound control — the account, the buttons — are
+ * `render` and `action` definitions.
+ */
 export class ClippingsSettingTab extends PluginSettingTab {
 	plugin: ClippingsPlugin;
+	private notebooks: Notebook[] | null = null;
+	private notebooksFor: string | null = null; // the sign-in the list was fetched under
 
 	constructor(app: App, plugin: ClippingsPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
-	/** Re-render if the tab is open — the sign-in callback lands while it is. */
+	/** Re-render — the sign-in callback lands while the tab is open. */
 	refresh(): void {
-		if (this.containerEl.isShown()) this.display();
+		this.update();
 	}
 
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
-		const s = this.plugin.settings;
-		const save = () => this.plugin.saveSettings();
+	// ---- value routing: a few keys are not plain settings properties ----
 
-		// ---- Account ----
+	getControlValue(key: string): unknown {
+		const s = this.plugin.settings;
+		if (key === 'noteTemplate') return s.noteTemplate || DEFAULT_NOTE_TEMPLATE;
+		if (key === 'syncEveryMinutes') return String(s.syncEveryMinutes);
+		if (key.startsWith(OVERRIDE)) return s.folderOverrides[Number(key.slice(OVERRIDE.length))] ?? '';
+		return super.getControlValue(key);
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		const s = this.plugin.settings;
+		if (key === 'noteTemplate') {
+			const v = str(value);
+			s.noteTemplate = v.trim() === DEFAULT_NOTE_TEMPLATE.trim() ? '' : v;
+		} else if (key === 'syncEveryMinutes') {
+			s.syncEveryMinutes = parseInt(String(value), 10) || 0;
+			this.plugin.schedule();
+		} else if (key === 'server') {
+			const next = (str(value).trim() || DEFAULT_SERVER).replace(/\/+$/, '');
+			if (next !== s.server) {
+				s.server = next;
+				this.plugin.auth.save(null); // tokens belong to the old server
+				this.notebooks = null;
+			}
+		} else if (key === 'baseFolder') {
+			s.baseFolder = str(value).trim() || DEFAULT_SETTINGS.baseFolder;
+		} else if (key === 'filenameTemplate') {
+			s.filenameTemplate = str(value).trim() || DEFAULT_FILENAME_TEMPLATE;
+		} else if (key.startsWith(OVERRIDE)) {
+			const id = Number(key.slice(OVERRIDE.length));
+			const clean = str(value).trim();
+			if (clean) s.folderOverrides[id] = clean;
+			else delete s.folderOverrides[id];
+		} else {
+			await super.setControlValue(key, value);
+			return;
+		}
+		await this.plugin.saveSettings();
+	}
+
+	private loading = false;
+
+	/** Fetch the notebook list once per sign-in, then re-render with it. */
+	private loadNotebooks(): void {
+		const tokens = this.plugin.auth.load();
+		if (!tokens) {
+			this.notebooks = null;
+			return;
+		}
+		if (this.loading || (this.notebooksFor === tokens.access && this.notebooks)) return;
+		this.loading = true;
+		void this.plugin.api
+			.notebooks()
+			.then((list) => {
+				this.notebooks = list;
+				this.notebooksFor = tokens.access;
+			})
+			.catch(() => {
+				this.notebooks = [];
+			})
+			.finally(() => {
+				this.loading = false;
+				this.refresh();
+			});
+	}
+
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		// Called on every render: the moment to start fetching notebooks if
+		// they are not in hand yet (guarded, so it never loops).
+		this.loadNotebooks();
+		const connected = () => this.plugin.isConnected();
+		const templateHelp = createFragment((f) => {
+			f.appendText('Variables: ');
+			f.createEl('code', { text: VARIABLES });
+			f.createEl('br');
+			f.appendText('Filters: ');
+			f.createEl('code', { text: FILTERS });
+			f.createEl('br');
+			f.appendText('Blocks: ');
+			f.createEl('code', { text: '{{#if note}} … {{else}} … {{/if}}' });
+			f.appendText('. Keep clippings_id in the frontmatter — it is how the plugin recognises its own notes.');
+		});
+
+		return [
+			{
+				name: 'Account',
+				desc: 'Sign in to Clippings to sync clips into this vault.',
+				aliases: ['connect', 'disconnect', 'sign in', 'log in'],
+				render: (setting: Setting) => this.renderAccount(setting),
+			},
+			{
+				type: 'group',
+				heading: 'Where clips land',
+				items: [
+					{
+						name: 'Base folder',
+						desc: 'Every synced note lives under this folder.',
+						control: { type: 'text', key: 'baseFolder', placeholder: DEFAULT_SETTINGS.baseFolder },
+					},
+					{
+						name: 'Folder template',
+						desc: 'Sub-folder under the base folder. Leave empty for none. Variables: notebook, platform, platform_label, creator, year, month.',
+						control: {
+							type: 'text',
+							key: 'folderTemplate',
+							placeholder: DEFAULT_FOLDER_TEMPLATE,
+							validate: (v) => templateError(v) || undefined,
+						},
+					},
+					{
+						name: 'Filename template',
+						desc: 'Without the .md. Variables and filters as for the note template.',
+						control: {
+							type: 'text',
+							key: 'filenameTemplate',
+							placeholder: DEFAULT_FILENAME_TEMPLATE,
+							validate: (v) => templateError(v) || undefined,
+						},
+					},
+					...this.overrideItems(),
+				],
+			},
+			{
+				type: 'group',
+				heading: 'The note',
+				cls: 'clippings-template-group',
+				items: [
+					{ name: 'Template help', desc: templateHelp, searchable: false },
+					{
+						name: 'Note template',
+						desc: 'What each clip becomes. Empty means the built-in default, shown here for editing.',
+						aliases: ['frontmatter', 'properties'],
+						control: {
+							type: 'textarea',
+							key: 'noteTemplate',
+							rows: 18,
+							validate: (v) => templateError(v.trim() ? v : DEFAULT_NOTE_TEMPLATE) || undefined,
+						},
+					},
+					{
+						name: 'Reset the note template',
+						desc: 'Back to the built-in default.',
+						action: () => {
+							this.plugin.settings.noteTemplate = '';
+							void this.plugin.saveSettings().then(() => this.refresh());
+						},
+					},
+					{
+						name: 'If a note already exists',
+						desc: 'What happens when a clip arrives and its note is already in the vault, and what "Re-render notes" may touch. "Unedited" means the note is exactly what the plugin last wrote.',
+						control: {
+							type: 'dropdown',
+							key: 'existingNote',
+							options: {
+								skip: 'Leave it alone',
+								'overwrite-if-unedited': 'Overwrite if unedited',
+								overwrite: 'Overwrite',
+							},
+						},
+					},
+					{
+						name: 'Re-render notes',
+						desc: 'Rewrite every note this vault has from the current template, respecting the setting above.',
+						disabled: () => !connected(),
+						action: () => void this.plugin.rerender(),
+					},
+				],
+			},
+			{
+				type: 'group',
+				heading: 'Sync',
+				items: [
+					{ name: 'Sync when Obsidian opens', control: { type: 'toggle', key: 'syncOnLaunch' } },
+					{
+						name: 'Sync every',
+						control: {
+							type: 'dropdown',
+							key: 'syncEveryMinutes',
+							options: { '0': 'Only when I ask', '5': '5 minutes', '15': '15 minutes', '30': '30 minutes', '60': 'Hour' },
+						},
+					},
+					{
+						name: 'Include clips saved before this vault was connected',
+						desc: 'Off means only clips saved from now on arrive here.',
+						aliases: ['history'],
+						control: { type: 'toggle', key: 'syncHistory' },
+					},
+					{
+						name: 'Sync now',
+						desc: 'Also available as the command "Clippings: Sync now".',
+						disabled: () => !connected(),
+						action: () => void this.plugin.syncNow(),
+					},
+				],
+			},
+			{
+				type: 'group',
+				heading: 'Advanced',
+				items: [
+					{
+						name: 'Server',
+						desc: 'Leave as is unless you run your own server for development. Changing it signs this vault out.',
+						control: { type: 'text', key: 'server', placeholder: DEFAULT_SERVER },
+					},
+					{
+						name: 'Vault key',
+						desc: 'How the server tells this vault from your others. Minted once; there is no reason to change it.',
+						control: { type: 'text', key: 'vaultKey', disabled: true },
+					},
+				],
+			},
+		];
+	}
+
+	private overrideItems(): SettingGroupItem[] {
+		if (!this.plugin.isConnected()) return [];
+		if (this.notebooks === null) {
+			return [{ name: 'Per-notebook folders', desc: 'Loading your notebooks…', searchable: false }];
+		}
+		if (!this.notebooks.length) {
+			return [{ name: 'Per-notebook folders', desc: 'No notebooks yet.', searchable: false }];
+		}
+		return [
+			{
+				name: 'Per-notebook folders',
+				desc: 'Send a notebook somewhere other than the folder template says. Relative to the base folder; empty uses the template.',
+			},
+			...this.notebooks.map((nb): SettingGroupItem => ({
+				name: nb.name,
+				desc: nb.destinations.includes('obsidian') ? '' : 'Not publishing to Obsidian — change that on the notebook’s edit page.',
+				aliases: ['notebook folder'],
+				control: { type: 'text', key: `${OVERRIDE}${nb.id}`, placeholder: 'Folder template' },
+			})),
+		];
+	}
+
+	private renderAccount(setting: Setting): void {
 		const tokens = this.plugin.auth.load();
 		if (tokens) {
-			new Setting(containerEl)
-				.setName('Account')
+			setting
 				.setDesc(
 					`Connected as ${tokens.email ?? 'your account'}` +
 						(tokens.planLabel ? ` (${tokens.planLabel})` : '') +
@@ -131,8 +378,7 @@ export class ClippingsSettingTab extends PluginSettingTab {
 					}),
 				);
 		} else {
-			new Setting(containerEl)
-				.setName('Account')
+			setting
 				.setDesc('Not connected. Connect opens your browser to sign in to Clippings and sends you back here.')
 				.addButton((b) =>
 					b
@@ -142,233 +388,6 @@ export class ClippingsSettingTab extends PluginSettingTab {
 							await this.plugin.connect();
 						}),
 				);
-		}
-
-		// ---- Where clips land ----
-		new Setting(containerEl).setName('Where clips land').setHeading();
-
-		new Setting(containerEl)
-			.setName('Base folder')
-			.setDesc('Every synced note lives under this folder.')
-			.addText((t) =>
-				t
-					.setPlaceholder(DEFAULT_SETTINGS.baseFolder)
-					.setValue(s.baseFolder)
-					.onChange(async (v) => {
-						s.baseFolder = v.trim() || DEFAULT_SETTINGS.baseFolder;
-						await save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Folder template')
-			.setDesc('Sub-folder under the base folder. Leave empty for none. Variables: notebook, platform, platform_label, creator, year, month.')
-			.addText((t) =>
-				t
-					.setPlaceholder(DEFAULT_FOLDER_TEMPLATE)
-					.setValue(s.folderTemplate)
-					.onChange(async (v) => {
-						s.folderTemplate = v.trim();
-						await save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Filename template')
-			.setDesc(`Without the .md. Variables and filters as for the note template.`)
-			.addText((t) =>
-				t
-					.setPlaceholder(DEFAULT_FILENAME_TEMPLATE)
-					.setValue(s.filenameTemplate)
-					.onChange(async (v) => {
-						s.filenameTemplate = v.trim() || DEFAULT_FILENAME_TEMPLATE;
-						await save();
-					}),
-			);
-
-		const overridesEl = containerEl.createDiv();
-		if (tokens) void this.renderOverrides(overridesEl);
-
-		// ---- The note ----
-		new Setting(containerEl).setName('The note').setHeading();
-		const help = containerEl.createDiv({ cls: 'clippings-help' });
-		help.createSpan({ text: 'Variables: ' });
-		help.createEl('code', { text: VARIABLES });
-		help.createEl('br');
-		help.createSpan({ text: 'Filters: ' });
-		help.createEl('code', { text: FILTERS });
-		help.createEl('br');
-		help.createSpan({ text: 'Blocks: ' });
-		help.createEl('code', { text: '{{#if note}} … {{else}} … {{/if}}' });
-		help.createSpan({ text: '. Keep clippings_id in the frontmatter — it is how the plugin recognises its own notes.' });
-
-		const errorEl = containerEl.createDiv({ cls: 'clippings-template-error' });
-		const showError = (tpl: string) => {
-			errorEl.setText(templateError(tpl.trim() ? tpl : DEFAULT_NOTE_TEMPLATE));
-		};
-		const templateSetting = new Setting(containerEl)
-			.setName('Note template')
-			.setDesc('Empty means the built-in default, shown here for editing.')
-			.setClass('clippings-template')
-			.addTextArea((t) => {
-				t.setValue(s.noteTemplate || DEFAULT_NOTE_TEMPLATE).onChange(async (v) => {
-					s.noteTemplate = v.trim() === DEFAULT_NOTE_TEMPLATE.trim() ? '' : v;
-					showError(v);
-					await save();
-				});
-			});
-		templateSetting.controlEl.insertAdjacentElement('afterend', errorEl);
-		showError(s.noteTemplate);
-
-		new Setting(containerEl)
-			.setName('Reset the note template')
-			.setDesc('Back to the built-in default.')
-			.addButton((b) =>
-				b.setButtonText('Reset to default').onClick(async () => {
-					s.noteTemplate = '';
-					await save();
-					this.display();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName('If a note already exists')
-			.setDesc(
-				'What happens when a clip arrives and its note is already in the vault, and what "Re-render notes" may touch. ' +
-					'"Unedited" means the note is exactly what the plugin last wrote.',
-			)
-			.addDropdown((d) =>
-				d
-					.addOptions({
-						skip: 'Leave it alone',
-						'overwrite-if-unedited': 'Overwrite if unedited',
-						overwrite: 'Overwrite',
-					})
-					.setValue(s.existingNote)
-					.onChange(async (v) => {
-						s.existingNote = v as ExistingNotePolicy;
-						await save();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Re-render notes')
-			.setDesc('Rewrite every note this vault has from the current template, respecting the setting above.')
-			.addButton((b) =>
-				b.setButtonText('Re-render notes').onClick(async () => {
-					b.setDisabled(true);
-					await this.plugin.rerender();
-					b.setDisabled(false);
-				}),
-			);
-
-		// ---- Sync ----
-		new Setting(containerEl).setName('Sync').setHeading();
-
-		new Setting(containerEl)
-			.setName('Sync when Obsidian opens')
-			.addToggle((t) =>
-				t.setValue(s.syncOnLaunch).onChange(async (v) => {
-					s.syncOnLaunch = v;
-					await save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName('Sync every')
-			.addDropdown((d) =>
-				d
-					.addOptions({ '0': 'Only when I ask', '5': '5 minutes', '15': '15 minutes', '30': '30 minutes', '60': 'Hour' })
-					.setValue(String(s.syncEveryMinutes))
-					.onChange(async (v) => {
-						s.syncEveryMinutes = parseInt(v, 10) || 0;
-						await save();
-						this.plugin.schedule();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Include clips saved before this vault was connected')
-			.setDesc('Off means only clips saved from now on arrive here.')
-			.addToggle((t) =>
-				t.setValue(s.syncHistory).onChange(async (v) => {
-					s.syncHistory = v;
-					await save();
-				}),
-			);
-
-		new Setting(containerEl)
-			.setName('Sync now')
-			.setDesc(tokens ? 'Also available as the command "Clippings: Sync now".' : 'Connect first.')
-			.addButton((b) =>
-				b
-					.setButtonText('Sync now')
-					.setDisabled(!tokens)
-					.onClick(async () => {
-						b.setDisabled(true);
-						await this.plugin.syncNow();
-						b.setDisabled(false);
-					}),
-			);
-
-		// ---- Advanced ----
-		new Setting(containerEl).setName('Advanced').setHeading();
-
-		new Setting(containerEl)
-			.setName('Server')
-			.setDesc('Leave as is unless you run your own server for development. Changing it signs this vault out.')
-			.addText((t) =>
-				t
-					.setPlaceholder(DEFAULT_SERVER)
-					.setValue(s.server)
-					.onChange(async (v) => {
-						const next = (v.trim() || DEFAULT_SERVER).replace(/\/+$/, '');
-						if (next !== s.server) {
-							s.server = next;
-							this.plugin.auth.save(null);
-							await save();
-						}
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName('Vault key')
-			.setDesc('How the server tells this vault from your others. Minted once; there is no reason to change it.')
-			.addText((t) => t.setValue(s.vaultKey).setDisabled(true));
-	}
-
-	private async renderOverrides(el: HTMLElement): Promise<void> {
-		const s = this.plugin.settings;
-		let notebooks: { id: number; name: string; destinations: string[] }[];
-		try {
-			notebooks = await this.plugin.api.notebooks();
-		} catch {
-			new Setting(el).setName('Per-notebook folders').setDesc('Could not load your notebooks right now.');
-			return;
-		}
-		if (!el.isConnected) return; // the tab was closed while we waited
-		new Setting(el)
-			.setName('Per-notebook folders')
-			.setDesc('Send a notebook somewhere other than the folder template says. Relative to the base folder; empty uses the template.');
-		for (const nb of notebooks) {
-			const publishes = nb.destinations.includes('obsidian');
-			new Setting(el)
-				.setName(nb.name)
-				.setDesc(publishes ? '' : 'Not publishing to Obsidian — change that on the notebook’s edit page.')
-				.addText((t) =>
-					t
-						.setPlaceholder('Folder template')
-						.setValue(s.folderOverrides[nb.id] ?? '')
-						.onChange(async (v) => {
-							const clean = v.trim();
-							if (clean) s.folderOverrides[nb.id] = clean;
-							else delete s.folderOverrides[nb.id];
-							await this.plugin.saveSettings();
-						}),
-				);
-		}
-		if (!notebooks.length) {
-			new Setting(el).setDesc('No notebooks yet.');
 		}
 	}
 }
