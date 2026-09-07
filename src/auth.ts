@@ -34,7 +34,20 @@ interface Pending {
 	startedAt: number;
 }
 
-export class AuthError extends Error {}
+/** The server answered and said no (`rejected`), or could not be reached. */
+export class AuthError extends Error {
+	constructor(
+		message: string,
+		public rejected = false,
+	) {
+		super(message);
+	}
+}
+
+/** requestUrl threw before any HTTP answer: offline, DNS, refused. */
+export function isNetworkError(e: unknown): boolean {
+	return !(e instanceof AuthError) && e instanceof Error && !('status' in e);
+}
 
 function base64url(bytes: ArrayBuffer | Uint8Array): string {
 	const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -129,12 +142,14 @@ export class AuthStore {
 		return tokens;
 	}
 
-	/** Rotates both halves. On failure the stored tokens are cleared: the
-	 * server has already forgotten them, and keeping a dead pair only makes
-	 * every later call fail the same way. */
+	/** Rotates both halves. When the server *rejects* the refresh the stored
+	 * tokens are cleared — it has already forgotten them, and keeping a dead
+	 * pair only makes every later call fail the same way. When the server
+	 * cannot be reached at all they are kept: a laptop on a train is not a
+	 * revoked sign-in, and the next successful call refreshes normally. */
 	async refresh(): Promise<Tokens> {
 		const current = this.load();
-		if (!current) throw new AuthError('Not connected.');
+		if (!current) throw new AuthError('Not connected.', true);
 		try {
 			const tokens = await exchange(current.server, {
 				grant_type: 'refresh_token',
@@ -146,7 +161,7 @@ export class AuthStore {
 			this.save(tokens);
 			return tokens;
 		} catch (e) {
-			this.save(null);
+			if (e instanceof AuthError && e.rejected) this.save(null);
 			throw e;
 		}
 	}
@@ -179,7 +194,8 @@ async function exchange(server: string, form: Record<string, string>): Promise<T
 	});
 	if (res.status !== 200) {
 		const code = (res.json as { error?: string } | null)?.error ?? `HTTP ${res.status}`;
-		throw new AuthError(`Clippings did not accept the sign-in (${code}).`);
+		// 5xx is the server having a bad moment, not a verdict on the tokens.
+		throw new AuthError(`Clippings did not accept the sign-in (${code}).`, res.status < 500);
 	}
 	const body = res.json as { access_token: string; refresh_token: string; expires_in: number };
 	return {

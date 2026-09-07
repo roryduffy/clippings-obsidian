@@ -43,10 +43,24 @@ export default class ClippingsPlugin extends Plugin {
 		this.settingTab = new ClippingsSettingTab(this.app, this);
 		this.addSettingTab(this.settingTab);
 
-		// Sync once the vault is indexed (the ledger reads the metadata cache),
-		// then on the timer. Both are quiet unless something lands.
+		// Sync once the vault is indexed, then on the timer. Both are quiet
+		// unless something lands. The ledger reconciles against the metadata
+		// cache, and on a large vault that cache is still filling when the
+		// layout is ready — syncing then would miss existing notes and write
+		// them again with a (2). So: wait for the cache's first "resolved",
+		// but not forever, since a plugin enabled mid-session never sees one.
 		this.app.workspace.onLayoutReady(() => {
-			if (this.settings.syncOnLaunch) void this.syncer.run({ manual: false });
+			if (!this.settings.syncOnLaunch) return;
+			let done = false;
+			const go = () => {
+				if (done) return;
+				done = true;
+				this.app.metadataCache.offref(ref);
+				void this.syncer.run({ manual: false });
+			};
+			const ref = this.app.metadataCache.on('resolved', go);
+			this.registerEvent(ref);
+			window.setTimeout(go, 10_000);
 		});
 		this.schedule();
 	}

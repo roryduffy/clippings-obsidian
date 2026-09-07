@@ -9,12 +9,18 @@
  * Connect again instead of a wall of errors.
  */
 import { requestUrl } from 'obsidian';
-import { AuthStore, Tokens } from './auth';
+import { AuthError, AuthStore, Tokens } from './auth';
 import type { Clip, ClipsPage } from './types';
 
 export class SignedOut extends Error {
 	constructor() {
 		super('Not connected to Clippings.');
+	}
+}
+
+export class Offline extends Error {
+	constructor() {
+		super('Clippings could not be reached. Check your connection and try again.');
 	}
 }
 
@@ -45,14 +51,19 @@ export class ApiClient {
 			// spending a round trip on the 401.
 			tokens = await this.refreshOrSignOut();
 		}
-		const res = await requestUrl({
-			url: `${tokens.server}${path}`,
-			method,
-			headers: { Authorization: `Bearer ${tokens.access}`, Accept: 'application/json' },
-			contentType: body === undefined ? undefined : 'application/json',
-			body: body === undefined ? undefined : JSON.stringify(body),
-			throw: false,
-		});
+		let res;
+		try {
+			res = await requestUrl({
+				url: `${tokens.server}${path}`,
+				method,
+				headers: { Authorization: `Bearer ${tokens.access}`, Accept: 'application/json' },
+				contentType: body === undefined ? undefined : 'application/json',
+				body: body === undefined ? undefined : JSON.stringify(body),
+				throw: false,
+			});
+		} catch {
+			throw new Offline();
+		}
 		if (res.status === 401 && !retried) {
 			await this.refreshOrSignOut();
 			return this.call<T>(method, path, body, true);
@@ -68,8 +79,10 @@ export class ApiClient {
 	private async refreshOrSignOut(): Promise<Tokens> {
 		try {
 			return await this.auth.refresh();
-		} catch {
-			throw new SignedOut();
+		} catch (e) {
+			// Only a rejection is a sign-out; anything else is the network.
+			if (e instanceof AuthError && e.rejected) throw new SignedOut();
+			throw new Offline();
 		}
 	}
 

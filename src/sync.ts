@@ -6,7 +6,7 @@
  */
 import { Notice, TFile } from 'obsidian';
 import type ClippingsPlugin from './main';
-import { ApiError, SignedOut } from './api';
+import { ApiError, Offline, SignedOut } from './api';
 import { Ledger } from './ledger';
 import { ensureFolder, filenameFor, folderFor, uniquePath } from './place';
 import { DEFAULT_NOTE_TEMPLATE, render, variables } from './render';
@@ -20,6 +20,7 @@ export interface SyncResult {
 	skipped: number; // already in the vault and left alone
 	failed: number;
 	error?: string; // a run-level failure (signed out, server down)
+	status?: string; // the status-bar line for that failure
 }
 
 async function sha256(text: string): Promise<string> {
@@ -77,9 +78,12 @@ export class Syncer {
 			result.error =
 				e instanceof SignedOut
 					? 'Clippings is disconnected. Connect again in the plugin settings.'
-					: e instanceof ApiError
+					: e instanceof Offline
 						? e.message
-						: `Clippings could not sync: ${(e as Error).message}`;
+						: e instanceof ApiError
+							? e.message
+							: `Clippings could not sync: ${(e as Error).message}`;
+			result.status = e instanceof SignedOut ? 'Clippings: disconnected' : e instanceof Offline ? 'Clippings: offline' : 'Clippings: sync failed';
 		} finally {
 			this.running = false;
 		}
@@ -157,7 +161,12 @@ export class Syncer {
 			}
 			await this.plugin.saveSettings();
 		} catch (e) {
-			result.error = e instanceof SignedOut ? 'Clippings is disconnected. Connect again in the plugin settings.' : `Clippings could not re-render: ${(e as Error).message}`;
+			result.error =
+				e instanceof SignedOut
+					? 'Clippings is disconnected. Connect again in the plugin settings.'
+					: e instanceof Offline
+						? e.message
+						: `Clippings could not re-render: ${(e as Error).message}`;
 		} finally {
 			this.running = false;
 		}
@@ -174,7 +183,9 @@ export class Syncer {
 
 	private report(r: SyncResult, manual: boolean): void {
 		if (r.error) {
-			this.plugin.setStatus('Clippings: sync failed');
+			// Quiet unless asked: a laptop that is offline every fifteen
+			// minutes should not say so every fifteen minutes.
+			this.plugin.setStatus(r.status ?? 'Clippings: sync failed');
 			if (manual) new Notice(r.error, 8000);
 			return;
 		}

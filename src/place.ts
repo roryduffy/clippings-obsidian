@@ -48,14 +48,22 @@ export async function ensureFolder(app: App, path: string): Promise<void> {
 	}
 }
 
-/** `folder/name.md`, or `folder/name (2).md` … when something else already has that path. */
+/**
+ * `folder/name.md`, or `folder/name (2).md` … when something else already
+ * has that name. Compared case-insensitively: macOS and Windows file systems
+ * are, and Obsidian's index is not, so "Foo.md" beside "foo.md" would pass
+ * the index and fail the write.
+ */
 export function uniquePath(app: App, folder: string, filename: string): string {
+	const taken = new Set(
+		(app.vault.getFolderByPath(folder)?.children ?? []).map((f) => f.name.toLowerCase()),
+	);
 	const stem = filename.replace(/\.md$/, '');
-	let candidate = normalizePath(`${folder}/${filename}`);
+	let name = filename;
 	let n = 2;
-	while (app.vault.getAbstractFileByPath(candidate)) {
-		candidate = normalizePath(`${folder}/${stem} (${n}).md`);
+	while (taken.has(name.toLowerCase())) {
+		name = `${stem} (${n}).md`;
 		n++;
 	}
-	return candidate;
+	return normalizePath(`${folder}/${name}`);
 }
