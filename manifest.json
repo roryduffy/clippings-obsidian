@@ -1,7 +1,7 @@
 {
 	"id": "clippings",
 	"name": "Clippings",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"minAppVersion": "1.13.0",
 	"description": "Sync the transcripts and takeaways you save with Clippings into your vault, with control over folders, filenames and note templates.",
 	"author": "Clippings",
