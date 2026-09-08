@@ -5,13 +5,12 @@ videos and photo carousels from TikTok, Instagram, YouTube Shorts, X and
 Facebook, transcribed with key takeaways — into your vault as Markdown
 notes, with control over where they land and what they look like.
 
-> **Status: 0.1.0.** Submitted to the community plugin directory. Until it is
-> listed, install it with [BRAT](https://github.com/TfTHacker/obsidian42-brat)
-> using the repository `roryduffy/clippings-obsidian`.
+Install it from **Settings → Community plugins → Browse** and search for
+**Clippings**.
 
 ## How it works
 
-1. Install the plugin and open its settings.
+1. Install the plugin from Community plugins and open its settings.
 2. Press **Connect**. Your browser opens clippingsapp.xyz, you sign in, and
    you are sent straight back to Obsidian.
 3. On your [Clippings settings](https://clippingsapp.xyz/settings), press
