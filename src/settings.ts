@@ -209,10 +209,21 @@ export class ClippingsSettingTab extends PluginSettingTab {
 			f.appendText('. Keep clippings_id in the frontmatter — it is how the plugin recognises its own notes.');
 		});
 
+		// Built against the configured server so the link follows a dev server
+		// rather than always pointing at production.
+		const accountHelp = createFragment((f) => {
+			f.appendText('Sign in to Clippings to sync clips into this vault. ');
+			f.createEl('a', {
+				text: 'What Clippings stores for this vault',
+				href: `${this.plugin.settings.server.replace(/\/+$/, '')}/privacy#obsidian`,
+			});
+			f.appendText('.');
+		});
+
 		return [
 			{
 				name: 'Account',
-				desc: 'Sign in to Clippings to sync clips into this vault.',
+				desc: accountHelp,
 				aliases: ['connect', 'disconnect', 'sign in', 'log in'],
 				render: (setting: Setting) => this.renderAccount(setting),
 			},
