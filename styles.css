@@ -1,31 +1,23 @@
 /* Clippings — settings-tab tweaks only. Everything else is Obsidian's own UI. */
-.clippings-template-group .setting-item:has(textarea) {
+/* The note-template editor group: name and description above, textarea
+   full-width below. A row with no control (the template help) hides its
+   empty control slot so it lays out as before. */
+.clippings-template-editor .setting-item {
 	flex-direction: column;
 	align-items: stretch;
 }
-.clippings-template-group .setting-item-control {
+.clippings-template-editor .setting-item-control {
 	width: 100%;
 	margin-top: 8px;
 }
-.clippings-template-group textarea {
+.clippings-template-editor .setting-item-control:empty {
+	display: none;
+}
+.clippings-template-editor textarea {
 	width: 100%;
 	min-height: 320px;
 	font-family: var(--font-monospace);
 	font-size: var(--font-smaller);
 	line-height: 1.4;
 	resize: vertical;
-}
-.clippings-template-error {
-	color: var(--text-error);
-	font-size: var(--font-smaller);
-	margin-top: 6px;
-	min-height: 1.2em;
-}
-.clippings-help {
-	color: var(--text-muted);
-	font-size: var(--font-smaller);
-	margin: -4px 0 12px;
-}
-.clippings-help code {
-	font-size: var(--font-smaller);
 }

@@ -259,10 +259,13 @@ export class ClippingsSettingTab extends PluginSettingTab {
 					...this.overrideItems(),
 				],
 			},
+			// The editor is its own group so styles.css can stack its row
+			// vertically by group class: the declarative API has no per-item
+			// class, and matching the row by its textarea would need :has().
 			{
 				type: 'group',
 				heading: 'The note',
-				cls: 'clippings-template-group',
+				cls: 'clippings-template-editor',
 				items: [
 					{ name: 'Template help', desc: templateHelp, searchable: false },
 					{
@@ -276,6 +279,11 @@ export class ClippingsSettingTab extends PluginSettingTab {
 							validate: (v) => templateError(v.trim() ? v : DEFAULT_NOTE_TEMPLATE) || undefined,
 						},
 					},
+				],
+			},
+			{
+				type: 'group',
+				items: [
 					{
 						name: 'Reset the note template',
 						desc: 'Back to the built-in default.',
