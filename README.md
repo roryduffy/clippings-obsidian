@@ -32,11 +32,9 @@ Your clips can then flow into the tools you already think in: Obsidian, Notion a
 - Never overwrites a note you have edited and never deletes anything
 - Works on desktop, iPhone, iPad and Android
 
-<!-- Plugin demo: uncomment once assets/demo.gif exists (share a TikTok, note appears in the vault).
 ## Plugin demo
 
-![Plugin demo](assets/demo.gif)
--->
+![A clip arriving in the vault as a note, with its properties, note, takeaways and transcript](assets/demo.gif)
 
 ## Plugin setup
 
