@@ -390,7 +390,7 @@ export class ClippingsSettingTab extends PluginSettingTab {
 				);
 		} else {
 			setting
-				.setDesc('Not connected. Connect opens your browser to sign in to Clippings and sends you back here.')
+				.setDesc('Not connected. Connect opens your browser to sign in to Clippings, or create a free account, and sends you back here.')
 				.addButton((b) =>
 					b
 						.setButtonText('Connect')

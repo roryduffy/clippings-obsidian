@@ -1,9 +1,9 @@
 {
 	"id": "clippings",
-	"name": "Clippings",
-	"version": "0.1.3",
+	"name": "Clippings Official",
+	"version": "0.1.4",
 	"minAppVersion": "1.13.0",
-	"description": "Sync the transcripts and takeaways you save with Clippings into your vault, with control over folders, filenames and note templates.",
+	"description": "Save TikToks, Reels and Shorts to your vault as notes: transcript, AI takeaways and your own note, synced automatically by Clippings.",
 	"author": "Clippings",
 	"authorUrl": "https://clippingsapp.xyz",
 	"isDesktopOnly": false
