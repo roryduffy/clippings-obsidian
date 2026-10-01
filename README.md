@@ -57,7 +57,7 @@ Inside the plugin's settings:
 
 ## Support and feedback
 
-Questions, bugs or feature requests: email [clippings@momentumsoftware.xyz](mailto:clippings@momentumsoftware.xyz) or open an issue on [GitHub](https://github.com/roryduffy/clippings-obsidian/issues). We read everything.
+Questions, bugs or feature requests: email [contact@clippingsapp.xyz](mailto:contact@clippingsapp.xyz) or open an issue on [GitHub](https://github.com/roryduffy/clippings-obsidian/issues). We read everything.
 
 **Note:** This plugin needs a Clippings account. Creating one is free, and a free account can sync to Obsidian: 5 clips to start, then one a week. Starter and Pro add a monthly allowance, and annual plans start with a free trial. Remember to use **`OBSIDIAN10`** for 10% off your first payment.
 [Get Clippings](https://clippingsapp.xyz/?utm_source=obsidian&utm_medium=plugin&utm_campaign=readme) · [See plans](https://clippingsapp.xyz/pricing?utm_source=obsidian&utm_medium=plugin&utm_campaign=readme)
